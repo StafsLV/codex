@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="lv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Saziņas forma</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="page">
+    <section class="contact-card" aria-labelledby="contact-title">
+      <p class="eyebrow">Sazinies ar mums</p>
+      <h1 id="contact-title">Apple stila saziņas forma</h1>
+      <p class="subtitle">Atstāj ziņu, un atbildēsim 24 stundu laikā.</p>
+
+      <form class="contact-form" action="#" method="post">
+        <div class="field-row">
+          <label class="field">
+            <span>Vārds</span>
+            <input type="text" name="name" placeholder="Tavs vārds" required />
+          </label>
+          <label class="field">
+            <span>E-pasts</span>
+            <input type="email" name="email" placeholder="epasts@piemers.lv" required />
+          </label>
+        </div>
+
+        <label class="field">
+          <span>Tēma</span>
+          <input type="text" name="subject" placeholder="Par ko vēlies rakstīt?" required />
+        </label>
+
+        <label class="field">
+          <span>Ziņa</span>
+          <textarea name="message" rows="6" placeholder="Ieraksti savu ziņu..." required></textarea>
+        </label>
+
+        <button type="submit">Nosūtīt ziņu</button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>
