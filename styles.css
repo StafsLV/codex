@@ -78,6 +78,22 @@ textarea {
 input::placeholder,
 textarea::placeholder { color: color-mix(in srgb, var(--muted), transparent 20%); }
 
+input[type="file"] {
+  cursor: pointer;
+}
+
+input[type="file"]::file-selector-button {
+  margin-right: 12px;
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font: inherit;
+  font-weight: 600;
+  color: #fff;
+  background: var(--focus);
+  cursor: pointer;
+}
+
 input:focus,
 textarea:focus,
 input.clicked,
@@ -108,6 +124,27 @@ button {
 
 button:hover { transform: translateY(-1px); filter: brightness(1.05); }
 button:active { transform: translateY(0); }
+
+.result-card {
+  text-align: center;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4px;
+  border-radius: 999px;
+  padding: 13px 20px;
+  color: #fff;
+  background: linear-gradient(140deg, #0071e3, #42a1ff);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.back-link:hover {
+  filter: brightness(1.05);
+}
 
 .alert-modal {
   position: fixed;
