@@ -16,7 +16,7 @@
       <h1 id="contact-title">Apple stila saziņas forma</h1>
       <p class="subtitle">Atstāj ziņu, un atbildēsim 24 stundu laikā.</p>
 
-      <form class="contact-form" action="#" method="post">
+      <form class="contact-form" action="#" method="post" novalidate>
         <div class="field-row">
           <label class="field">
             <span>Vārds</span>
@@ -42,5 +42,70 @@
       </form>
     </section>
   </main>
+
+  <div class="alert-modal" id="validation-alert" role="alertdialog" aria-modal="true" aria-labelledby="alert-title" hidden>
+    <div class="alert-card">
+      <button class="alert-close" type="button" aria-label="Aizvērt paziņojumu">×</button>
+      <img
+        class="angry-dog"
+        src="https://media.giphy.com/media/fqtyYcXoDV0X6ss8Mf/giphy.gif"
+        alt="Nikns suns"
+      />
+      <h2 id="alert-title">Grrr! Aizpildi visus laukus pareizi!</h2>
+      <p>Pārbaudi visus ievades laukus un mēģini vēlreiz.</p>
+    </div>
+  </div>
+
+  <script>
+    const form = document.querySelector('.contact-form');
+    const fields = form.querySelectorAll('input, textarea');
+    const alertModal = document.getElementById('validation-alert');
+    const closeAlertBtn = alertModal.querySelector('.alert-close');
+
+    const showAlert = () => {
+      alertModal.hidden = false;
+      document.body.classList.add('modal-open');
+    };
+
+    const hideAlert = () => {
+      alertModal.hidden = true;
+      document.body.classList.remove('modal-open');
+    };
+
+    fields.forEach((field) => {
+      field.addEventListener('focus', () => {
+        field.classList.add('clicked');
+      });
+
+      field.addEventListener('blur', () => {
+        field.classList.remove('clicked');
+      });
+    });
+
+    form.addEventListener('submit', (event) => {
+      if (!form.checkValidity()) {
+        event.preventDefault();
+        fields.forEach((field) => {
+          if (!field.checkValidity()) {
+            field.classList.add('invalid');
+          } else {
+            field.classList.remove('invalid');
+          }
+        });
+
+        showAlert();
+        return;
+      }
+
+      hideAlert();
+    });
+
+    closeAlertBtn.addEventListener('click', hideAlert);
+    alertModal.addEventListener('click', (event) => {
+      if (event.target === alertModal) {
+        hideAlert();
+      }
+    });
+  </script>
 </body>
 </html>
