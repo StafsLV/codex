@@ -202,6 +202,22 @@ button[type="submit"]:active {
     inset 0 1px 0 rgba(255, 255, 255, .25);
 }
 
+.captcha-wrap {
+  display: flex;
+  justify-content: center;
+  min-height: 78px;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+
+.captcha-wrap.invalid {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger), transparent 82%);
+}
+
 .result-card {
   text-align: center;
 }

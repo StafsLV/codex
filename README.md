@@ -10,6 +10,17 @@ npm start
 
 Pēc palaišanas forma ir pieejama `http://127.0.0.1:3000`.
 
+## reCAPTCHA
+
+Forma izmanto Google reCAPTCHA, lai samazinātu spama iesniegumus. Izveido reCAPTCHA v2 "I'm not a robot" atslēgas Google reCAPTCHA administrācijas panelī un konfigurē tās servera vidē:
+
+```sh
+RECAPTCHA_SITE_KEY=site_key_no_google
+RECAPTCHA_SECRET_KEY=secret_key_no_google
+```
+
+`RECAPTCHA_SITE_KEY` tiek ievietots formas HTML, bet `RECAPTCHA_SECRET_KEY` tiek izmantots serverī, lai pārbaudītu `POST /submit` pieprasījumu pirms pielikumu saglabāšanas un iesnieguma ierakstīšanas.
+
 ## Automātiskais e-pasts
 
 Pēc veiksmīgas formas saglabāšanas serveris mēģina nosūtīt apstiprinājuma e-pastu uz iesniedzēja norādīto adresi. E-pasts tiek sūtīts tikai tad, ja forma jau ir izgājusi e-pasta validāciju. Ja SMTP sūtīšana neizdodas, iesniegums paliek saglabāts un kļūda tiek ielogota servera konsolē.
