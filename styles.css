@@ -204,12 +204,12 @@ button[type="submit"]:active {
 
 .captcha-wrap {
   display: flex;
-  justify-content: center;
+  justify-content: left;
   min-height: 78px;
   margin-top: 8px;
   padding: 10px;
-  border: 1px solid transparent;
-  border-radius: 14px;
+  border: 10px solid transparent;
+  border-radius: 25px;
   transition: border-color .2s ease, box-shadow .2s ease;
 }
 
