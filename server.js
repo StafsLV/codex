@@ -15,6 +15,7 @@ const SUBMISSIONS_FILE = path.join(DATA_DIR, "submissions.jsonl");
 const MAX_BODY_SIZE = 10 * 1024 * 1024;
 const SMTP_TIMEOUT_MS = Number(process.env.SMTP_TIMEOUT_MS || 10000);
 const PROJECT_NAME = process.env.PROJECT_NAME || "Saziņas forma";
+const RECAPTCHA_VERIFY_URL = "https://www.google.com/recaptcha/api/siteverify";
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -37,6 +38,41 @@ const send = (res, status, body, contentType = "text/html; charset=utf-8") => {
     "Content-Length": Buffer.byteLength(body),
   });
   res.end(body);
+};
+
+const injectPageConfig = (body) =>
+  body.replaceAll("{{RECAPTCHA_SITE_KEY}}", escapeHtml(process.env.RECAPTCHA_SITE_KEY || ""));
+
+const verifyRecaptcha = async (token, remoteAddress) => {
+  const secret = process.env.RECAPTCHA_SECRET_KEY;
+
+  if (!secret || !token) {
+    return false;
+  }
+
+  const params = new URLSearchParams({
+    secret,
+    response: token,
+  });
+
+  if (remoteAddress) {
+    params.set("remoteip", remoteAddress);
+  }
+
+  const response = await fetch(RECAPTCHA_VERIFY_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: params.toString(),
+  });
+
+  if (!response.ok) {
+    return false;
+  }
+
+  const result = await response.json();
+  return result.success === true;
 };
 
 const getSmtpConfig = () => {
@@ -466,6 +502,14 @@ const handleSubmit = async (req, res) => {
     return;
   }
 
+  const captchaIsValid = await verifyRecaptcha(fields["g-recaptcha-response"], req.socket.remoteAddress);
+
+  if (!captchaIsValid) {
+    const result = renderResult("Forma nav nosūtīta", "reCAPTCHA pārbaude neizdevās. Atgriezies formā un mēģini vēlreiz.", 400);
+    send(res, result.status, result.body);
+    return;
+  }
+
   await fs.mkdir(UPLOAD_DIR, { recursive: true });
   const savedFiles = [];
 
@@ -520,8 +564,13 @@ const serveStatic = async (req, res) => {
   }
 
   try {
-    const body = await fs.readFile(filePath);
+    let body = await fs.readFile(filePath);
     const contentType = MIME_TYPES[path.extname(filePath)] || "application/octet-stream";
+
+    if (path.basename(filePath) === "index.html") {
+      body = Buffer.from(injectPageConfig(body.toString("utf8")));
+    }
+
     res.writeHead(200, { "Content-Type": contentType, "Content-Length": body.length });
     res.end(body);
   } catch (error) {
