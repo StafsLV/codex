@@ -2,6 +2,9 @@ const http = require("node:http");
 const { promises: fs } = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const net = require("node:net");
+const os = require("node:os");
+const tls = require("node:tls");
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || "127.0.0.1";
@@ -10,6 +13,8 @@ const DATA_DIR = process.env.DATA_DIR || path.join(ROOT_DIR, "data");
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(DATA_DIR, "uploads");
 const SUBMISSIONS_FILE = path.join(DATA_DIR, "submissions.jsonl");
 const MAX_BODY_SIZE = 10 * 1024 * 1024;
+const SMTP_TIMEOUT_MS = Number(process.env.SMTP_TIMEOUT_MS || 10000);
+const PROJECT_NAME = process.env.PROJECT_NAME || "Saziņas forma";
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -32,6 +37,274 @@ const send = (res, status, body, contentType = "text/html; charset=utf-8") => {
     "Content-Length": Buffer.byteLength(body),
   });
   res.end(body);
+};
+
+const getSmtpConfig = () => {
+  if (!process.env.SMTP_HOST || !process.env.SMTP_FROM_EMAIL) {
+    return null;
+  }
+
+  const secure = process.env.SMTP_SECURE === "true";
+
+  return {
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT || (secure ? 465 : 587)),
+    user: process.env.SMTP_USER || "",
+    password: process.env.SMTP_PASSWORD || "",
+    from: process.env.SMTP_FROM_EMAIL,
+    secure,
+  };
+};
+
+const encodeMimeHeader = (value) => {
+  if (/^[\x00-\x7F]*$/.test(value)) {
+    return value;
+  }
+
+  return `=?UTF-8?B?${Buffer.from(value, "utf8").toString("base64")}?=`;
+};
+
+const formatEmailAddress = (email, name) => {
+  if (!name) {
+    return `<${email}>`;
+  }
+
+  return `${encodeMimeHeader(name)} <${email}>`;
+};
+
+const normalizeEmailBody = (value) => String(value).replace(/\r?\n/g, "\r\n");
+
+const escapeSmtpLine = (line) => (line.startsWith(".") ? `.${line}` : line);
+
+const buildAutoReplyEmail = (toEmail) => {
+  const subject = "Paldies, Jūsu pieteikums ir saņemts";
+  const body = `Labdien!
+
+Paldies! Jūsu iesniegtā forma ir saņemta.
+
+Ar cieņu,
+${PROJECT_NAME}`;
+
+  return normalizeEmailBody(
+    [
+      `From: ${formatEmailAddress(process.env.SMTP_FROM_EMAIL, PROJECT_NAME)}`,
+      `To: ${formatEmailAddress(toEmail)}`,
+      `Subject: ${encodeMimeHeader(subject)}`,
+      "MIME-Version: 1.0",
+      'Content-Type: text/plain; charset="UTF-8"',
+      "Content-Transfer-Encoding: 8bit",
+      "",
+      body,
+    ].join("\n"),
+  )
+    .split("\r\n")
+    .map(escapeSmtpLine)
+    .join("\r\n");
+};
+
+const createSmtpClient = (config) =>
+  new Promise((resolve, reject) => {
+    let buffer = "";
+    const responseQueue = [];
+    const waiters = [];
+    const socket = config.secure
+      ? tls.connect({
+          host: config.host,
+          port: config.port,
+          servername: config.host,
+        })
+      : net.connect({
+          host: config.host,
+          port: config.port,
+        });
+
+    const cleanup = () => {
+      socket.removeAllListeners();
+      socket.destroy();
+    };
+
+    const fail = (error) => {
+      cleanup();
+      reject(error);
+    };
+
+    const readResponse = () =>
+      new Promise((readResolve, readReject) => {
+        const response = responseQueue.shift();
+
+        if (response) {
+          readResolve(response);
+          return;
+        }
+
+        waiters.push({ resolve: readResolve, reject: readReject });
+      });
+
+    const pushResponse = (response) => {
+      const waiter = waiters.shift();
+
+      if (waiter) {
+        waiter.resolve(response);
+        return;
+      }
+
+      responseQueue.push(response);
+    };
+
+    const processBuffer = () => {
+      let lineEnd = buffer.indexOf("\r\n");
+
+      while (lineEnd !== -1) {
+        const line = buffer.slice(0, lineEnd);
+        buffer = buffer.slice(lineEnd + 2);
+        const code = Number(line.slice(0, 3));
+        const done = line[3] === " ";
+
+        if (done && Number.isInteger(code)) {
+          pushResponse({ code, line });
+        }
+
+        lineEnd = buffer.indexOf("\r\n");
+      }
+    };
+
+    socket.setTimeout(SMTP_TIMEOUT_MS);
+    socket.on("data", (chunk) => {
+      buffer += chunk.toString("utf8");
+      processBuffer();
+    });
+    socket.on("error", fail);
+    socket.on("timeout", () => fail(new Error("SMTP savienojuma noildze")));
+
+    socket.once(config.secure ? "secureConnect" : "connect", () => {
+      resolve({
+        socket,
+        readResponse,
+        close: cleanup,
+      });
+    });
+  });
+
+const sendSmtpCommand = async (client, command, expectedCodes) => {
+  client.socket.write(`${command}\r\n`);
+  const response = await client.readResponse();
+
+  if (!expectedCodes.includes(response.code)) {
+    throw new Error(`SMTP komanda neizdevās (${response.line})`);
+  }
+
+  return response;
+};
+
+const startTls = async (client, config) =>
+  new Promise((resolve, reject) => {
+    client.socket.removeAllListeners("data");
+    client.socket.removeAllListeners("error");
+    client.socket.removeAllListeners("timeout");
+
+    const secureSocket = tls.connect({
+      socket: client.socket,
+      servername: config.host,
+    });
+
+    secureSocket.setTimeout(SMTP_TIMEOUT_MS);
+    secureSocket.once("secureConnect", () => {
+      let buffer = "";
+      const responseQueue = [];
+      const waiters = [];
+
+      const readResponse = () =>
+        new Promise((readResolve) => {
+          const response = responseQueue.shift();
+
+          if (response) {
+            readResolve(response);
+            return;
+          }
+
+          waiters.push(readResolve);
+        });
+
+      const pushResponse = (response) => {
+        const waiter = waiters.shift();
+
+        if (waiter) {
+          waiter(response);
+          return;
+        }
+
+        responseQueue.push(response);
+      };
+
+      secureSocket.on("data", (chunk) => {
+        buffer += chunk.toString("utf8");
+        let lineEnd = buffer.indexOf("\r\n");
+
+        while (lineEnd !== -1) {
+          const line = buffer.slice(0, lineEnd);
+          buffer = buffer.slice(lineEnd + 2);
+          const code = Number(line.slice(0, 3));
+          const done = line[3] === " ";
+
+          if (done && Number.isInteger(code)) {
+            pushResponse({ code, line });
+          }
+
+          lineEnd = buffer.indexOf("\r\n");
+        }
+      });
+      secureSocket.on("error", reject);
+      secureSocket.on("timeout", () => reject(new Error("SMTP TLS savienojuma noildze")));
+
+      resolve({
+        socket: secureSocket,
+        readResponse,
+        close: () => secureSocket.destroy(),
+      });
+    });
+    secureSocket.once("error", reject);
+  });
+
+const sendAutoReply = async (toEmail) => {
+  const config = getSmtpConfig();
+
+  if (!config) {
+    console.warn("Automātiskais e-pasts netika nosūtīts: SMTP_HOST vai SMTP_FROM_EMAIL nav konfigurēts.");
+    return;
+  }
+
+  let client = await createSmtpClient(config);
+
+  try {
+    await client.readResponse();
+    await sendSmtpCommand(client, `EHLO ${os.hostname() || "localhost"}`, [250]);
+
+    if (!config.secure) {
+      await sendSmtpCommand(client, "STARTTLS", [220]);
+      client = await startTls(client, config);
+      await sendSmtpCommand(client, `EHLO ${os.hostname() || "localhost"}`, [250]);
+    }
+
+    if (config.user && config.password) {
+      const credentials = Buffer.from(`\0${config.user}\0${config.password}`, "utf8").toString("base64");
+      await sendSmtpCommand(client, `AUTH PLAIN ${credentials}`, [235]);
+    }
+
+    await sendSmtpCommand(client, `MAIL FROM:<${config.from}>`, [250]);
+    await sendSmtpCommand(client, `RCPT TO:<${toEmail}>`, [250, 251]);
+    await sendSmtpCommand(client, "DATA", [354]);
+    client.socket.write(`${buildAutoReplyEmail(toEmail)}\r\n.\r\n`);
+
+    const response = await client.readResponse();
+
+    if (response.code !== 250) {
+      throw new Error(`SMTP e-pasta sūtīšana neizdevās (${response.line})`);
+    }
+
+    await sendSmtpCommand(client, "QUIT", [221]);
+  } finally {
+    client.close();
+  }
 };
 
 const readBody = (req) =>
@@ -224,6 +497,13 @@ const handleSubmit = async (req, res) => {
 
   await fs.mkdir(DATA_DIR, { recursive: true });
   await fs.appendFile(SUBMISSIONS_FILE, `${JSON.stringify(submission)}\n`);
+
+  // Pēc veiksmīgas saglabāšanas nosūtām apstiprinājuma e-pastu iesniedzējam.
+  try {
+    await sendAutoReply(fields.email);
+  } catch (error) {
+    console.error("Automātiskā e-pasta nosūtīšana neizdevās:", error);
+  }
 
   const result = renderResult("Ziņa nosūtīta", "Paldies! Forma ir saglabāta lokālajā backendā.");
   send(res, result.status, result.body);

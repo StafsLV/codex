@@ -125,6 +125,33 @@ button {
 button:hover { transform: translateY(-1px); filter: brightness(1.05); }
 button:active { transform: translateY(0); }
 
+button[type="submit"] {
+  background: linear-gradient(145deg, #ff4d57 0%, #e01b24 50%, #9f1018 100%);
+  box-shadow:
+    0 7px 0 #7f0d13,
+    0 14px 24px rgba(224, 27, 36, .32),
+    inset 0 1px 0 rgba(255, 255, 255, .34);
+  transform-style: preserve-3d;
+  transition: transform .65s ease, filter .18s ease, box-shadow .18s ease;
+}
+
+button[type="submit"]:hover {
+  transform: translateY(-2px) rotate(360deg);
+  filter: brightness(1.08);
+  box-shadow:
+    0 9px 0 #7f0d13,
+    0 18px 30px rgba(224, 27, 36, .42),
+    inset 0 1px 0 rgba(255, 255, 255, .4);
+}
+
+button[type="submit"]:active {
+  transform: translateY(5px) rotate(360deg);
+  box-shadow:
+    0 2px 0 #7f0d13,
+    0 7px 14px rgba(224, 27, 36, .28),
+    inset 0 1px 0 rgba(255, 255, 255, .25);
+}
+
 .result-card {
   text-align: center;
 }
